@@ -1,588 +1,580 @@
-// 📦 Firebase Modules
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+// ✅ Firebase v9 Modular SDK
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
 import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification,
+  signOut,
   onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
 import {
-  getDatabase,
-  ref,
-  set,
-  get,
-  update,
-  child,
-  remove,
-  push,
-  onValue
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-// 🔧 Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyDqsWJgwX-vWIawPZt0XTnQHSE9AqwczkE",
   authDomain: "word-finder-346db.firebaseapp.com",
-  databaseURL: "https://word-finder-346db-default-rtdb.firebaseio.com",
   projectId: "word-finder-346db",
   storageBucket: "word-finder-346db.appspot.com",
   messagingSenderId: "129230255125",
   appId: "1:129230255125:web:39632d82bb30c55c318a1c"
 };
 
-// 🔌 Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth();
-const db = getDatabase(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-// 🌍 Global Variables
+// 🔄 Global state
 let currentUser = null;
-let selectedDifficulty = "easy";
-let gridSize = 10;
-let timeLeft = 0;
-let countdown = null;
-let score = 0;
-let userCash = 0;
 let wordsToFind = [];
 let selectedCells = [];
 let foundWords = [];
-let isDragging = false;
+let score = 0;
+let timeLeft = 0;
+let countdown = null;
+let gridSize = 5;
 let dirR = null;
 let dirC = null;
+let isDragging = false;
+let currentLevel = "easy";
 let cells = [];
+let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// 🔁 DOM Elements
+const screens = document.querySelectorAll(".screen");
+const authScreen = document.getElementById("auth-screen");
+const startScreen = document.getElementById("start-screen");
+const gameScreen = document.getElementById("game-screen");
+const endScreen = document.getElementById("end-screen");
 
-// 🔐 Signup Function
-window.signup = async function () {
-  const username = document.getElementById("signupUsername").value.trim();
-  const email = document.getElementById("signupEmail").value.trim();
-  const password = document.getElementById("signupPassword").value.trim();
+const grid = document.getElementById("grid");
+const timerDisplay = document.getElementById("timer");
+const scoreDisplay = document.getElementById("score");
+const finalScore = document.getElementById("final-score");
+const wordList = document.getElementById("words");
 
-  if (!username || !email || !password) {
-    showError("Please fill all fields.");
-    return;
-  }
-
-  try {
-    // 🔐 Create Firebase Auth account
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    await sendEmailVerification(user);
-
-    // ✅ Save user info under UID
-    const userRef = ref(db, 'users/' + user.uid);
-    await set(userRef, {
-      username,
-      email,
-      password, // not safe in real apps!
-      cash: 0,
-      avatar: "",
-      upi: "",
-      messages: [],
-      deletedAt: null
-    });
-
-    showError("Signup successful! Please verify your email.");
-  } catch (error) {
-    showError(error.message);
-  }
-};
-
-// 🔐 Login Function
-window.login = async function () {
-  const usernameInput = document.getElementById("loginUsername").value.trim();
-  const passwordInput = document.getElementById("loginPassword").value.trim();
-
-  if (!usernameInput || !passwordInput) {
-    showError("Enter both fields.");
-    return;
-  }
-
-  try {
-    // 🔍 Search all users for matching username
-    const usersRef = ref(db, "users");
-    const snapshot = await get(usersRef);
-    if (!snapshot.exists()) {
-      showError("No users found.");
-      return;
-    }
-
-    let matchUser = null;
-    snapshot.forEach(child => {
-      const data = child.val();
-      if (data.username === usernameInput && data.password === passwordInput) {
-        matchUser = { uid: child.key, ...data };
-      }
-    });
-
-    if (!matchUser) {
-      showError("Username or password incorrect.");
-      return;
-    }
-
-    // 🔐 Check email verification
-    const user = auth.currentUser;
-    await signInWithEmailAndPassword(auth, matchUser.email, matchUser.password);
-    if (!auth.currentUser.emailVerified) {
-      showError("Please verify your email first.");
-      await remove(ref(db, "users/" + matchUser.uid));
-      await auth.currentUser.delete();
-      return;
-    }
-
-    currentUser = matchUser.uid;
-    userCash = matchUser.cash;
-
-    document.getElementById("profile-username").textContent = matchUser.username;
-    document.getElementById("profile-cash").textContent = matchUser.cash;
-    document.getElementById("avatar-img").src = matchUser.avatar || "https://via.placeholder.com/100";
-
-    showScreen("start-screen");
-    document.getElementById("profile-btn").style.visibility = "visible";
-    document.getElementById("profile-btn").style.opacity = 1;
-
-  } catch (err) {
-    console.error(err);
-    showError("Login failed.");
-  }
-};
-
-// 🔄 Auth State Listener (auto-login if already signed in)
+// 🔐 Auth State Check
 onAuthStateChanged(auth, async (user) => {
-  if (user && user.emailVerified) {
-    const userRef = ref(db, 'users/' + user.uid);
-    const snapshot = await get(userRef);
-    if (snapshot.exists()) {
-      currentUser = user.uid;
-      const userData = snapshot.val();
-      userCash = userData.cash || 0;
-      document.getElementById("profile-username").textContent = userData.username;
-      document.getElementById("profile-cash").textContent = userCash;
-      document.getElementById("avatar-img").src = userData.avatar || "https://via.placeholder.com/100";
-      showScreen("start-screen");
-      document.getElementById("profile-btn").style.visibility = "visible";
-      document.getElementById("profile-btn").style.opacity = 1;
-    }
+  if (user) {
+    currentUser = user;
+    await goToStartScreen();
+  } else {
+    showScreen(authScreen);
   }
 });
 
-// 💳 Save UPI
-window.saveUPI = async function () {
-  const upi = document.getElementById("upiInput").value.trim();
-  if (!upi) {
-    showError("Please enter your UPI ID.");
-    return;
-  }
+// 📺 Utility to show any screen
+function showScreen(screen) {
+  screens.forEach(s => s.classList.remove("active"));
+  screen.classList.add("active");
+}
 
-  try {
-    const userRef = ref(db, 'users/' + currentUser);
-    await update(userRef, { upi });
-    document.getElementById("upiPopup").style.display = "none";
-    showError("✅ UPI Saved!");
-  } catch (err) {
-    console.error(err);
-    showError("❌ Failed to save UPI.");
-  }
-};
-// 🎯 Select Level
-window.selectLevel = function (level) {
-  selectedDifficulty = level;
-  document.getElementById("selected-level").textContent = `Selected: ${level.toUpperCase()}`;
-  document.getElementById("start-button").style.display = "inline-block";
-
-  if (level === "easy") gridSize = 10;
-  else if (level === "medium") gridSize = 12;
-  else if (level === "hard") gridSize = 14;
-};
-
-// 🕹️ Start Game
-window.startGame = function () {
-  foundWords = [];
-  selectedCells = [];
-
-  score = 0;
-  timeLeft = selectedDifficulty === "easy" ? 60 : selectedDifficulty === "medium" ? 45 : 30;
-
-  document.getElementById("score").textContent = score;
-  document.getElementById("timer").textContent = timeLeft;
-  document.getElementById("words").textContent = "";
-
-  showScreen("game-screen");
-  generateGrid();
-  startTimer();
-};
-
-// 🔄 Show Any Screen
-window.showScreen = function (screenId) {
-  const screens = document.querySelectorAll(".screen");
-  screens.forEach(screen => screen.classList.remove("active"));
-
-  const target = document.getElementById(screenId);
-  if (target) {
-    target.classList.add("active");
-    target.classList.add("fade-in");
-  }
-};
-
-// 🔁 Back to Start
-window.goToLevelSelect = function () {
-  showScreen("start-screen");
-};
-
-// 🚨 Show Error Popup
-window.showError = function (msg) {
+// 🔴 Show error popup
+function showError(msg) {
   const popup = document.getElementById("error-popup");
   popup.textContent = msg;
   popup.style.display = "block";
-
+  popup.style.animation = "fadeUp 1s ease-out";
   setTimeout(() => {
     popup.style.display = "none";
-  }, 3000);
-};
-
-// 📦 Sample word list
-const wordList = {
-  easy: ["CAT", "DOG", "SUN", "CAR", "MAP"],
-  medium: ["APPLE", "BRICK", "CHESS", "FRUIT", "LEMON"],
-  hard: ["PYTHON", "OBJECT", "SCRIPT", "METHOD", "PUZZLE"]
-};
-
-// 🎲 Generate Grid
-function generateGrid() {
-  const grid = document.getElementById("grid");
-  grid.innerHTML = "";
-  grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
-
-  cells = [];
-
-  for (let i = 0; i < gridSize; i++) {
-    cells[i] = [];
-    for (let j = 0; j < gridSize; j++) {
-      const cell = document.createElement("div");
-      cell.className = "cell";
-      cell.dataset.row = i;
-      cell.dataset.col = j;
-      cell.textContent = letters[Math.floor(Math.random() * letters.length)];
-      grid.appendChild(cell);
-      cells[i][j] = cell;
-    }
-  }
-
-  wordsToFind = [...wordList[selectedDifficulty]];
-  document.getElementById("words").textContent = wordsToFind.join(", ");
-  placeWords(wordsToFind);
-}
-
-// 📌 Place words in grid (horizontal/vertical only)
-function placeWords(words) {
-  for (let word of words) {
-    let placed = false;
-
-    for (let attempts = 0; attempts < 100 && !placed; attempts++) {
-      const isVertical = Math.random() < 0.5;
-      const row = Math.floor(Math.random() * gridSize);
-      const col = Math.floor(Math.random() * gridSize);
-      const canPlace = isVertical
-        ? row + word.length <= gridSize
-        : col + word.length <= gridSize;
-
-      if (!canPlace) continue;
-
-      let fits = true;
-      for (let i = 0; i < word.length; i++) {
-        const r = isVertical ? row + i : row;
-        const c = isVertical ? col : col + i;
-        const existingChar = cells[r][c].textContent;
-        if (existingChar !== word[i] && existingChar !== "") {
-          fits = false;
-          break;
-        }
-      }
-
-      if (fits) {
-        for (let i = 0; i < word.length; i++) {
-          const r = isVertical ? row + i : row;
-          const c = isVertical ? col : col + i;
-          cells[r][c].textContent = word[i];
-        }
-        placed = true;
-      }
-    }
-  }
-}
-
-// 🧩 Cell Event Listeners
-window.grid = document.getElementById("grid");
-
-grid.addEventListener("mousedown", e => {
-  if (e.target.classList.contains("cell")) {
-    startSelection(e.target);
-  }
-});
-
-grid.addEventListener("mouseover", e => {
-  if (isDragging && e.target.classList.contains("cell")) {
-    continueSelection(e.target);
-  }
-});
-
-grid.addEventListener("mouseup", endSelection);
-grid.addEventListener("mouseleave", endSelection);
-
-// 👇 Start Word Selection
-function startSelection(cell) {
-  selectedCells = [cell];
-  cell.classList.add("selected");
-
-  const row = parseInt(cell.dataset.row);
-  const col = parseInt(cell.dataset.col);
-  dirR = dirC = null;
-
-  isDragging = true;
-}
-
-// 👉 Drag Selection
-function continueSelection(cell) {
-  if (selectedCells.includes(cell)) return;
-
-  const lastCell = selectedCells[selectedCells.length - 1];
-  const r1 = parseInt(lastCell.dataset.row);
-  const c1 = parseInt(lastCell.dataset.col);
-  const r2 = parseInt(cell.dataset.row);
-  const c2 = parseInt(cell.dataset.col);
-
-  const dr = r2 - r1;
-  const dc = c2 - c1;
-
-  if (dirR === null && dirC === null && (dr === 0 || dc === 0)) {
-    dirR = dr !== 0 ? dr / Math.abs(dr) : 0;
-    dirC = dc !== 0 ? dc / Math.abs(dc) : 0;
-  }
-
-  if (dr === dirR && dc === dirC) {
-    selectedCells.push(cell);
-    cell.classList.add("selected");
-  }
-}
-
-// 🏁 Finish Word Selection
-function endSelection() {
-  if (!isDragging) return;
-  isDragging = false;
-
-  const word = selectedCells.map(c => c.textContent).join("");
-  const reversed = selectedCells.map(c => c.textContent).reverse().join("");
-
-  if (wordsToFind.includes(word) || wordsToFind.includes(reversed)) {
-    selectedCells.forEach(cell => {
-      cell.classList.remove("selected");
-      cell.classList.add("found");
-    });
-
-    if (!foundWords.includes(word)) {
-      foundWords.push(word);
-      score++;
-      document.getElementById("score").textContent = score;
-
-      // 🎉 Bonus Time for Hard Mode
-      if (selectedDifficulty === "hard") {
-        timeLeft += 3;
-        document.getElementById("bonus-popup").style.display = "block";
-        setTimeout(() => {
-          document.getElementById("bonus-popup").style.display = "none";
-        }, 1000);
-      }
-
-      // 🎊 Confetti for all words in Hard
-      if (selectedDifficulty === "hard") {
-        confetti({ particleCount: 80, spread: 60 });
-      }
-
-      // 🏁 Game Complete
-      if (foundWords.length === wordsToFind.length) {
-        setTimeout(endGame, 1000);
-      }
-    }
-  } else {
-    selectedCells.forEach(cell => cell.classList.remove("selected"));
-  }
-
-  selectedCells = [];
-}
-// ⏳ Start Timer
-function startTimer() {
-  if (countdown) clearInterval(countdown);
-
-  countdown = setInterval(() => {
-    timeLeft--;
-    document.getElementById("timer").textContent = timeLeft;
-
-    if (timeLeft <= 0) {
-      clearInterval(countdown);
-      endGame();
-    }
   }, 1000);
 }
 
-// 🏁 End Game
-function endGame() {
-  clearInterval(countdown);
+// ✅ Sign up new user
+window.signup = async function () {
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value.trim();
 
-  document.getElementById("final-score").textContent = score;
-  showScreen("end-screen");
+  if (!email || !password) return showError("Fill both fields");
 
-  // 🎉 Big Confetti on Hard Win
-  if (selectedDifficulty === "hard" && foundWords.length === wordsToFind.length) {
-    confetti({
-      particleCount: 300,
-      spread: 120,
-      origin: { y: 0.6 },
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const uid = cred.user.uid;
+
+    await setDoc(doc(db, "users", uid), {
+      email,
+      scores: { easy: 0, medium: 0, hard: 0 },
+      cash: 0,
+      username: "New User",
+      avatar: null
     });
-  }
 
-  // 💰 Reward user
-  const reward = selectedDifficulty === "easy" ? 1 : selectedDifficulty === "medium" ? 2 : 3;
-  userCash += reward;
-  document.getElementById("profile-cash").textContent = userCash;
-
-  // 💾 Update DB
-  if (currentUser) {
-    const userRef = ref(db, 'users/' + currentUser);
-    update(userRef, { cash: userCash });
-  }
-}
-
-// 💵 Request Withdrawal
-window.requestWithdrawal = function () {
-  document.getElementById("withdraw-available").textContent = `Available: ₹${userCash}`;
-  document.getElementById("withdrawal-popup").style.display = "block";
-};
-
-window.closeWithdrawPopup = function () {
-  document.getElementById("withdrawal-popup").style.display = "none";
-};
-
-window.submitWithdrawal = async function () {
-  const amount = parseInt(document.getElementById("withdraw-amount").value);
-  if (isNaN(amount) || amount <= 0 || amount > userCash) {
-    showError("Enter valid amount.");
-    return;
-  }
-
-  const userRef = ref(db, 'users/' + currentUser);
-  await update(userRef, { cash: userCash - amount });
-
-  showError("✅ Request submitted!");
-  document.getElementById("withdrawal-popup").style.display = "none";
-  userCash -= amount;
-  document.getElementById("profile-cash").textContent = userCash;
-};
-
-// ❌ Confirm Delete Popup
-window.confirmDeleteUser = function () {
-  document.getElementById("delete-popup").style.display = "block";
-};
-
-window.cancelDeletePopup = function () {
-  document.getElementById("delete-popup").style.display = "none";
-};
-
-// ⏳ Start Delete Countdown
-window.startDeleteCountdown = async function () {
-  const deleteTime = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
-  const userRef = ref(db, 'users/' + currentUser);
-  await update(userRef, { deletedAt: deleteTime });
-
-  document.getElementById("delete-popup").style.display = "none";
-  document.getElementById("cancel-delete-button").style.display = "inline-block";
-  document.getElementById("delete-timer-display").style.display = "block";
-  startCountdownTimer(deleteTime);
-};
-
-// ⏹ Cancel Delete
-window.cancelPendingDeletion = async function () {
-  const userRef = ref(db, 'users/' + currentUser);
-  await update(userRef, { deletedAt: null });
-
-  document.getElementById("cancel-delete-button").style.display = "none";
-  document.getElementById("delete-timer-display").style.display = "none";
-};
-
-// ⏲️ Countdown Clock
-function startCountdownTimer(deleteTime) {
-  const display = document.getElementById("countdown-text");
-  const interval = setInterval(() => {
-    const remaining = deleteTime - Date.now();
-    if (remaining <= 0) {
-      clearInterval(interval);
-      display.textContent = "Deleted.";
-    } else {
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      display.textContent = `${h}h ${m}m ${s}s`;
-    }
-  }, 1000);
-}
-
-// 🔐 Admin Reset Confirmation
-window.showPasswordPrompt = function () {
-  document.getElementById("confirm-reset-popup").style.display = "none";
-  document.getElementById("password-prompt").style.display = "block";
-};
-
-window.cancelReset = function () {
-  document.getElementById("confirm-reset-popup").style.display = "none";
-};
-
-// ✅ Reset All Users
-window.checkResetPassword = async function () {
-  const inputPass = document.getElementById("reset-password").value;
-  const adminPassword = "admin123"; // change for security
-
-  if (inputPass === adminPassword) {
-    const usersRef = ref(db, 'users');
-    const snapshot = await get(usersRef);
-    if (snapshot.exists()) {
-      snapshot.forEach(child => {
-        update(ref(db, 'users/' + child.key), {
-          cash: 0,
-          messages: [],
-          deletedAt: null
-        });
-      });
-    }
-    showError("✅ All users reset.");
-    document.getElementById("password-prompt").style.display = "none";
-  } else {
-    showError("❌ Wrong password");
+    currentUser = cred.user;
+    goToStartScreen();
+  } catch (err) {
+    showError(err.message);
   }
 };
 
-// 💌 Message System
-window.showMessages = async function () {
-  const userRef = ref(db, 'users/' + currentUser);
-  const snapshot = await get(userRef);
-  const messages = snapshot.val().messages || [];
+// ✅ Login
+window.login = async function () {
+  const email = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value.trim();
 
-  const list = document.getElementById("message-list");
-  list.innerHTML = messages.length ? messages.map(m => `<p>${m}</p>`).join("") : "<p>No messages.</p>";
-
-  showScreen("message-screen");
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    currentUser = cred.user;
+    goToStartScreen();
+  } catch (err) {
+    showError("Login failed: " + err.message);
+  }
 };
 
-// 🚪 Logout
+// 🚪 Logout with confirmation popup
 window.confirmLogout = function () {
-  logoutUser();
+  document.getElementById("logout-popup").style.display = "block";
 };
 
 window.logoutUser = function () {
-  auth.signOut();
-  currentUser = null;
-  showScreen("auth-screen");
-  document.getElementById("profile-btn").style.visibility = "hidden";
-  document.getElementById("profile-btn").style.opacity = 0;
+  signOut(auth);
+  document.getElementById("logout-popup").style.display = "none";
 };
 
+window.cancelLogout = function () {
+  document.getElementById("logout-popup").style.display = "none";
+};
+
+// ✅ Load start screen with user data
+async function goToStartScreen() {
+  const uid = currentUser.uid;
+  const docSnap = await getDoc(doc(db, "users", uid));
+  const userData = docSnap.data();
+
+  document.getElementById("profile-username").textContent = userData.username || "User";
+  document.getElementById("profile-cash").textContent = userData.cash?.toFixed(2) || "0.00";
+
+  showScreen(startScreen);
+  showLeaderboard(currentLevel);
+}
+// 🎯 Select difficulty
+window.selectLevel = function (level) {
+  currentLevel = level;
+  document.getElementById("selected-level").textContent = `Selected: ${level.toUpperCase()}`;
+  gridSize = level === "easy" ? 5 : level === "medium" ? 7 : 9;
+};
+
+// 🧠 Show leaderboard
+async function showLeaderboard(level) {
+  const snapshot = await getDocs(collection(db, "users"));
+  const users = [];
+  snapshot.forEach(doc => {
+    const user = doc.data();
+    const score = user.scores?.[level] || 0;
+    users.push({ username: user.username || "Anonymous", score, avatar: user.avatar });
+  });
+
+  users.sort((a, b) => b.score - a.score);
+  const top3 = users.slice(0, 3);
+  let html = `<h3>${level.toUpperCase()} Leaderboard</h3>`;
+  if (top3.length === 0) {
+    html += "<p>No scores yet.</p>";
+  } else {
+    html += "<ol>";
+    top3.forEach((u, i) => {
+      const icon = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
+      html += `<li><span>${icon}</span> ${u.username} — <strong>${u.score}</strong></li>`;
+    });
+    html += "</ol>";
+  }
+
+  document.getElementById("leaderboard").innerHTML = html;
+}
+
+// ▶️ Start the game
+window.startGame = function () {
+  timeLeft = currentLevel === "easy" ? 30 : currentLevel === "medium" ? 60 : 120;
+  gridSize = currentLevel === "easy" ? 5 : currentLevel === "medium" ? 7 : 9;
+  score = 0;
+  selectedCells = [];
+  foundWords = [];
+  wordsToFind = [];
+  timerDisplay.textContent = timeLeft;
+  scoreDisplay.textContent = score;
+
+  grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+  showScreen(gameScreen);
+
+  generateWords();
+  buildGrid();
+  startTimer();
+};
+
+// 🔤 Word pool per difficulty
+const wordBank = {
+  easy: ["DOG", "CAT", "SUN", "BAT", "HEN"],
+  medium: ["APPLE", "HOUSE", "MANGO", "ZEBRA", "PENCIL"],
+  hard: ["ELEPHANT", "NOTEBOOK", "PYRAMID", "COMPUTER", "MICRO"]
+};
+
+// 🎲 Pick 5 random words
+function generateWords() {
+  const pool = wordBank[currentLevel];
+  while (wordsToFind.length < 5) {
+    const word = pool[Math.floor(Math.random() * pool.length)];
+    if (!wordsToFind.includes(word)) wordsToFind.push(word);
+  }
+
+  wordList.innerHTML = wordsToFind.map(w => `<span>${w}</span>`).join(" ");
+}
+
+// 🧱 Build grid with random letters
+function buildGrid() {
+  grid.innerHTML = "";
+  cells = [];
+
+  for (let i = 0; i < gridSize * gridSize; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.textContent = letters[Math.floor(Math.random() * letters.length)];
+    cell.dataset.index = i;
+    grid.appendChild(cell);
+    cells.push(cell);
+  }
+
+  wordsToFind.forEach(placeWord);
+}
+
+// 🔠 Place word in grid
+function placeWord(word) {
+  const directions = [
+    { r: 0, c: 1 }, { r: 1, c: 0 }, { r: 1, c: 1 }, { r: -1, c: 1 }
+  ];
+
+  for (let tries = 0; tries < 100; tries++) {
+    const dir = directions[Math.floor(Math.random() * directions.length)];
+    const row = Math.floor(Math.random() * gridSize);
+    const col = Math.floor(Math.random() * gridSize);
+
+    const indices = [];
+    let canPlace = true;
+
+    for (let i = 0; i < word.length; i++) {
+      const r = row + dir.r * i;
+      const c = col + dir.c * i;
+      if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) {
+        canPlace = false;
+        break;
+      }
+      const idx = r * gridSize + c;
+      if (cells[idx].dataset.locked && cells[idx].textContent !== word[i]) {
+        canPlace = false;
+        break;
+      }
+      indices.push(idx);
+    }
+
+    if (canPlace) {
+      for (let i = 0; i < word.length; i++) {
+        const idx = indices[i];
+        cells[idx].textContent = word[i];
+        cells[idx].dataset.locked = "true";
+      }
+      break;
+    }
+  }
+}
+
+// 🕒 Start timer countdown
+function startTimer() {
+  clearInterval(countdown);
+  countdown = setInterval(() => {
+    timeLeft--;
+    timerDisplay.textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(countdown);
+      endGame(false);
+    }
+  }, 1000);
+}
+
+// 🧠 Handle cell selection
+function clearSelection() {
+  selectedCells.forEach(c => c.classList.remove("selected"));
+  selectedCells = [];
+  dirR = dirC = null;
+}
+
+function selectCell(cell) {
+  if (!cell || selectedCells.includes(cell)) return;
+
+  if (selectedCells.length === 0) {
+    selectedCells.push(cell);
+    cell.classList.add("selected");
+  } else {
+    const last = selectedCells[selectedCells.length - 1];
+    const lastIdx = +last.dataset.index;
+    const newIdx = +cell.dataset.index;
+
+    const lastRow = Math.floor(lastIdx / gridSize);
+    const lastCol = lastIdx % gridSize;
+    const newRow = Math.floor(newIdx / gridSize);
+    const newCol = newIdx % gridSize;
+
+    const deltaR = newRow - lastRow;
+    const deltaC = newCol - lastCol;
+
+    if (selectedCells.length === 1) {
+      dirR = deltaR;
+      dirC = deltaC;
+    }
+
+    if (deltaR === dirR && deltaC === dirC) {
+      selectedCells.push(cell);
+      cell.classList.add("selected");
+    }
+  }
+}
+
+function checkWord() {
+  const word = selectedCells.map(c => c.textContent).join("");
+
+  if (wordsToFind.includes(word)) {
+    selectedCells.forEach(c => {
+      c.classList.remove("selected");
+      c.classList.add("found");
+    });
+
+    const index = wordsToFind.indexOf(word);
+    wordsToFind.splice(index, 1);
+    wordList.innerHTML = wordsToFind.map(w => `<span>${w}</span>`).join(" ");
+
+    // ⏱ Bonus time and score
+    let bonus = currentLevel === "easy" ? 3 : currentLevel === "medium" ? 5 : 7;
+    timeLeft += bonus;
+    timerDisplay.textContent = timeLeft;
+    score = (5 - wordsToFind.length) * 10 + timeLeft * 2;
+    scoreDisplay.textContent = score;
+
+    // 🎉 Visual
+    const popup = document.getElementById("bonus-popup");
+    if (popup) {
+      popup.textContent = `+${bonus}s`;
+      popup.style.display = "block";
+      popup.style.animation = "fadeUp 1s ease-out";
+      setTimeout(() => (popup.style.display = "none"), 1000);
+    }
+
+    if (wordsToFind.length === 0) {
+      clearInterval(countdown);
+      setTimeout(() => endGame(true), 500);
+    }
+  } else {
+    clearSelection();
+  }
+}
+
+// ⏹ Game Over
+async function endGame(didWin) {
+  clearInterval(countdown);
+  showScreen(endScreen);
+  finalScore.textContent = score;
+
+  const uid = currentUser.uid;
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  const data = snap.data();
+
+  if (didWin) {
+    endScreen.querySelector("h1").textContent = "🎉 You Won!";
+    if (currentLevel === "hard") {
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    }
+
+    const old = data.scores?.[currentLevel] || 0;
+    if (score > old) {
+      data.scores[currentLevel] = score;
+      await setDoc(ref, data);
+    }
+
+    let cashEarned = currentLevel === "easy" ? 0.05 : currentLevel === "medium" ? 0.07 : 0.1;
+    data.cash = (data.cash || 0) + cashEarned;
+    await setDoc(ref, data);
+    document.getElementById("profile-cash").textContent = data.cash.toFixed(2);
+    showError(`+₹${cashEarned.toFixed(2)} earned!`);
+  } else {
+    endScreen.querySelector("h1").textContent = "⏱ Time's Up!";
+  }
+
+  await showLeaderboard(currentLevel);
+      }
+
+
+// 📝 Change Name
+window.changeName = async function () {
+  const newName = prompt("Enter new name:");
+  if (!newName) return;
+
+  const uid = currentUser.uid;
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  const data = snap.data();
+  data.username = newName;
+  await setDoc(ref, data);
+
+  document.getElementById("profile-username").textContent = newName;
+  showError("✅ Name updated!");
+};
+
+// 🖼 Change Avatar
+window.changeAvatar = async function () {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+        const ref = doc(db, "users", currentUser.uid);
+        const snap = await getDoc(ref);
+        const data = snap.data();
+        data.avatar = dataUrl;
+        await setDoc(ref, data);
+
+        showError("✅ Avatar updated!");
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
+
+// 💸 Request Withdrawal
+window.requestWithdrawal = async function () {
+  const uid = currentUser.uid;
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  const data = snap.data();
+
+  const amount = parseFloat(prompt(`Enter amount to withdraw (Available ₹${data.cash.toFixed(2)}):`));
+  if (isNaN(amount) || amount < 10 || amount > data.cash) {
+    return showError("❌ Enter a valid amount (min ₹10)");
+  }
+
+  data.cash -= amount;
+  await setDoc(ref, data);
+  document.getElementById("profile-cash").textContent = data.cash.toFixed(2);
+  showError(`✅ Withdrawal of ₹${amount.toFixed(2)} submitted!`);
+};
+
+// ❌ Delete Me
+window.confirmDeleteUser = function () {
+  if (confirm("Are you sure you want to delete your account? This cannot be undone.")) {
+    deleteUserNow();
+  }
+};
+
+async function deleteUserNow() {
+  const uid = currentUser.uid;
+  await setDoc(doc(db, "users", uid), {}); // clear user data
+  await signOut(auth);
+  showError("Account deleted.");
+}
+
+// 💬 Messages (Local Only)
+window.showMessages = function () {
+  const msgContainer = document.getElementById("message-list");
+  const messages = JSON.parse(localStorage.getItem("messages") || "[]");
+
+  if (messages.length === 0) {
+    msgContainer.innerHTML = "<p>No messages yet.</p>";
+  } else {
+    msgContainer.innerHTML = messages.map((msg, i) =>
+      `<div style="background:#f1f1f1;padding:10px;margin-bottom:10px;border-radius:8px;">
+        <p>${msg}</p>
+        <button onclick="deleteMessage(${i})">🗑 Delete</button>
+      </div>`
+    ).join("");
+  }
+
+  showScreen(document.getElementById("message-screen"));
+};
+
+window.deleteMessage = function (index) {
+  let messages = JSON.parse(localStorage.getItem("messages") || "[]");
+  messages.splice(index, 1);
+  localStorage.setItem("messages", JSON.stringify(messages));
+  showMessages();
+};
+
+// 🖱 Mouse Events
+grid.addEventListener("mousedown", e => {
+  if (e.target.classList.contains("cell")) {
+    isDragging = true;
+    clearSelection();
+    selectCell(e.target);
+  }
+});
+
+grid.addEventListener("mousemove", e => {
+  if (isDragging && e.target.classList.contains("cell")) {
+    selectCell(e.target);
+  }
+});
+
+document.addEventListener("mouseup", () => {
+  if (isDragging) {
+    isDragging = false;
+    checkWord();
+  }
+});
+
+// 🤳 Touch Events
+grid.addEventListener("touchstart", e => {
+  isDragging = true;
+  const cell = getCellFromTouch(e);
+  if (cell) {
+    clearSelection();
+    selectCell(cell);
+  }
+});
+
+grid.addEventListener("touchmove", e => {
+  const cell = getCellFromTouch(e);
+  if (cell) {
+    selectCell(cell);
+  }
+});
+
+grid.addEventListener("touchend", () => {
+  isDragging = false;
+  checkWord();
+});
+
+// 📱 Helper to detect cell under finger
+function getCellFromTouch(e) {
+  const touch = e.touches[0];
+  const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+  return elem && elem.classList.contains("cell") ? elem : null;
+}
+
+// 🔙 Back to level select
+window.goToLevelSelect = function () {
+  showScreen(startScreen);
+  showLeaderboard(currentLevel);
+};
+
+// 🎉 Bonus popup (already styled in index.html)
+document.body.insertAdjacentHTML("beforeend", `
+  <div id="bonus-popup" style="display:none; position:fixed; top:50%; left:50%;
+  transform:translate(-50%, -50%);
+  background:#28a745; color:white; padding:10px 20px;
+  border-radius:10px; font-size:24px; z-index:999;">+3s</div>
+`);
