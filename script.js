@@ -65,22 +65,26 @@ window.signup = async function () {
   }
 
   try {
+    // 🔐 Create Firebase Auth account
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
     await sendEmailVerification(user);
+
+    // ✅ Save user info under UID
     const userRef = ref(db, 'users/' + user.uid);
     await set(userRef, {
-      username: username,
-      email: email,
+      username,
+      email,
+      password, // not safe in real apps!
       cash: 0,
+      avatar: "",
       upi: "",
       messages: [],
-      avatar: "",
       deletedAt: null
     });
 
-    showError("Signup successful! Verify your email before login.");
+    showError("Signup successful! Please verify your email.");
   } catch (error) {
     showError(error.message);
   }
@@ -88,44 +92,60 @@ window.signup = async function () {
 
 // 🔐 Login Function
 window.login = async function () {
-  const email = document.getElementById("loginUsername").value.trim();
-  const password = document.getElementById("loginPassword").value.trim();
+  const usernameInput = document.getElementById("loginUsername").value.trim();
+  const passwordInput = document.getElementById("loginPassword").value.trim();
 
-  if (!email || !password) {
-    showError("Please enter both fields.");
+  if (!usernameInput || !passwordInput) {
+    showError("Enter both fields.");
     return;
   }
 
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    if (!user.emailVerified) {
-      showError("Please verify your email before login.");
-      return;
-    }
-
-    const userRef = ref(db, 'users/' + user.uid);
-    const snapshot = await get(userRef);
-
+    // 🔍 Search all users for matching username
+    const usersRef = ref(db, "users");
+    const snapshot = await get(usersRef);
     if (!snapshot.exists()) {
-      showError("User data not found.");
+      showError("No users found.");
       return;
     }
 
-    currentUser = user.uid;
-    const userData = snapshot.val();
-    userCash = userData.cash || 0;
+    let matchUser = null;
+    snapshot.forEach(child => {
+      const data = child.val();
+      if (data.username === usernameInput && data.password === passwordInput) {
+        matchUser = { uid: child.key, ...data };
+      }
+    });
 
-    document.getElementById("profile-username").textContent = userData.username;
-    document.getElementById("profile-cash").textContent = userCash;
-    document.getElementById("avatar-img").src = userData.avatar || "https://via.placeholder.com/100";
+    if (!matchUser) {
+      showError("Username or password incorrect.");
+      return;
+    }
+
+    // 🔐 Check email verification
+    const user = auth.currentUser;
+    await signInWithEmailAndPassword(auth, matchUser.email, matchUser.password);
+    if (!auth.currentUser.emailVerified) {
+      showError("Please verify your email first.");
+      await remove(ref(db, "users/" + matchUser.uid));
+      await auth.currentUser.delete();
+      return;
+    }
+
+    currentUser = matchUser.uid;
+    userCash = matchUser.cash;
+
+    document.getElementById("profile-username").textContent = matchUser.username;
+    document.getElementById("profile-cash").textContent = matchUser.cash;
+    document.getElementById("avatar-img").src = matchUser.avatar || "https://via.placeholder.com/100";
 
     showScreen("start-screen");
     document.getElementById("profile-btn").style.visibility = "visible";
     document.getElementById("profile-btn").style.opacity = 1;
-  } catch (error) {
-    showError(error.message);
+
+  } catch (err) {
+    console.error(err);
+    showError("Login failed.");
   }
 };
 
