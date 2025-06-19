@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Word Finder Game</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
+</head>
+<body>
+
+<!-- Login/Signup UI -->
+<div id="auth-screen" class="screen login-screen active">
+  <h2>Login</h2>
+  <input id="loginUsername" type="text" placeholder="Username"><br>
+  <input id="loginPassword" type="password" placeholder="Password"><br>
+  <button onclick="login()">Login</button>
+
+  <h2>Sign Up</h2>
+  <input id="signupUsername" type="text" placeholder="Username"><br>
+  <input id="signupEmail" type="email" placeholder="Email"><br>
+  <input id="signupPassword" type="password" placeholder="Password"><br>
+  <button onclick="signup()">Sign Up</button>
+</div>
+
+<!-- Upi  pop up -->
+<div id="upiPopup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; z-index:999;">
+  <div style="background:white; padding:20px; border-radius:10px; text-align:center;">
+    <h3>Enter Your UPI ID</h3>
+    <input id="upiInput" type="text" placeholder="yourupi@bank"><br><br>
+    <button onclick="saveUPI()">Submit</button>
+  </div>
+</div>
+
+<!-- 💌 Message Screen -->
+<div id="message-screen" class="screen">
+  <h2>📩 Your Messages</h2>
+  <div id="message-list"></div>
+  <button onclick="goToLevelSelect()">⬅ Back</button>
+</div>
+
+
+<!-- Red popup for error alerts -->
+<div id="error-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#dc3545; color:white; padding:10px 20px; border-radius:10px; font-size:18px; z-index:999;">
+  Error
+</div>
+<!-- 💌 Message Screen Trigger and Level Select Page -->
+<div id="start-screen" class="screen fade-in">
+  <div style="max-width: 420px; margin: auto; padding: 32px 24px; background: rgba(18, 18, 18, 0.6); border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.4); backdrop-filter: blur(18px); text-align: center;">
+    
+    <h1 style="font-size: 34px; font-weight: 800; color: #ffffff; margin-bottom: 8px;">🎯 Word Finder</h1>
+    <p style="color: #ccc; font-size: 14px; margin-bottom: 24px;">Skill. Speed. Real Rewards.</p>
+
+    <!-- Messages Button -->
+    <button onclick="showMessages()" style="background: linear-gradient(135deg, #1e90ff, #00c6ff); padding: 12px 24px; border: none; border-radius: 30px; color: #fff; font-weight: bold; font-size: 16px; margin-bottom: 20px; position: relative;">
+      📨 Messages
+      <span id="msg-dot" style="display:none; position:absolute; top:-6px; right:-10px; background:#ff4757; color:white; font-size:12px; border-radius:50%; padding:2px 6px; font-weight:bold;"></span>
+    </button>
+
+    <!-- Difficulty -->
+    <h3 style="color: #fff; margin-bottom: 12px;">Choose Level</h3>
+    <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom: 24px;">
+      <button onclick="selectLevel('easy')" style="background:#27ae60; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">🌱 Easy</button>
+      <button onclick="selectLevel('medium')" style="background:#f39c12; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">✒️ Medium</button>
+      <button onclick="selectLevel('hard')" style="background:#c0392b; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">🧠 Hard</button>
+    </div>
+
+    <!-- Start Game -->
+    <button id="start-button" onclick="startGame()" style="display:none; background:linear-gradient(to right, #00b894, #00cec9); color:#fff; font-weight: bold; font-size:16px; padding:12px 28px; border-radius:40px; border:none; margin-bottom: 16px;">🎮 Start Game</button>
+
+    <div id="selected-level" style="color: #eee; font-weight: 600;"></div>
+    <div id="leaderboard" style="margin-top: 20px;"></div>
+
+    <!-- Logout -->
+    <button onclick="confirmLogout()" style="margin-top: 30px; background: transparent; color: #ccc; border: 1px solid #444; border-radius: 30px; padding: 10px 20px; font-weight: 500;">🚪 Logout</button>
+  </div>
+</div>
+   
+<!-- 🔄 Loading Spinner -->
+<div id="loading-spinner" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:rgba(255,255,255,0.8); padding:20px; border-radius:12px; z-index:9999;">
+  <div class="spinner" style="border: 6px solid #ccc; border-top: 6px solid #007bff;
+  border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
+</div>
+
+<style>
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
+
+<!-- 🔐 Confirmation Popup -->
+<div id="confirm-reset-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; border:2px solid #333; padding:20px; border-radius:10px; z-index:999;">
+  <h3>Reset all users and their scores?</h3>
+  <button onclick="cancelReset()" style="background:#28a745; color:white; margin:5px;">No</button>
+  <button onclick="showPasswordPrompt()" style="background:#dc3545; color:white; margin:5px;">Yes</button>
+</div>
+
+<!-- 💵 Custom Withdrawal Popup -->
+<div id="withdrawal-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:white; padding:20px; border-radius:12px; border:2px solid #007bff; z-index:10000; max-width:300px; width:90%; text-align:center;">
+  <h3 style="margin-bottom:10px;">Withdraw Cash</h3>
+  <p id="withdraw-available" style="margin-bottom:10px;">Available: ₹0</p>
+  <input id="withdraw-amount" type="number" placeholder="Enter amount" min="10" style="width:100%; padding:8px; border-radius:8px; border:1px solid #ccc; margin-bottom:12px;">
+  <br>
+  <button onclick="submitWithdrawal()" style="background:#007bff; color:white; padding:8px 16px; border:none; border-radius:6px;">Submit</button>
+  <button onclick="closeWithdrawPopup()" style="background:#dc3545; color:white; padding:8px 16px; border:none; border-radius:6px; margin-left:10px;">Cancel</button>
+</div>
+
+<!-- 🔐 Password Entry Popup -->
+<div id="password-prompt" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; border:2px solid #333; padding:20px; border-radius:10px; z-index:999;">
+  <h3>Enter Admin Password</h3>
+  <input type="password" id="reset-password" placeholder="Enter Password" />
+  <br><br>
+  <button onclick="checkResetPassword()" style="background:#007bff; color:white;">OK</button>
+</div>
+
+  <!-- Game Screen -->
+  <div id="game-screen" class="screen">
+    <h1>Find the Words!</h1>
+    <div>Time Left: <span id="timer">0</span>s</div>
+    <div>Score: <span id="score">0</span></div>
+    <div>Find: <span id="words"></span></div>
+    <div class="grid-wrapper">
+  <div id="grid"></div>
+</div>
+  </div>
+<button id="profile-btn" onclick="openProfile()" style="position:absolute; top:20px; right:20px; visibility: hidden; opacity: 0; transition: opacity 0.3s ease;">👤 Profile</button>
+
+<div id="profile-screen" class="screen">
+  <div id="profile-card"
+       style="opacity: 0; transition: opacity 0.6s ease;
+              max-width: 360px; margin: 48px auto;
+              padding: 24px 20px;
+              background: #444; border-radius: 16px;
+              box-shadow: 0 12px 25px rgba(0,0,0,0.3);
+              text-align: center; color: white;">
+
+    <h2 style="font-size: 24px; margin-bottom: 20px;">👤 Profile</h2>
+
+    <!-- Avatar and Button Row -->
+    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 24px;">
+      <img id="avatar-img"
+           src="https://via.placeholder.com/100"
+           alt="Avatar"
+           style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #ccc;" />
+
+      <button onclick="changeAvatar()"
+              style="background: #00c6ff; border: none;
+                     padding: 10px 16px; border-radius: 30px; color: white;
+                     font-weight: 600; font-size: 14px;">
+        📷 Change Avatar
+      </button>
+    </div>
+
+    <!-- Username -->
+    <div style="margin-bottom: 20px;">
+      <strong style="display: block; margin-bottom: 4px;">Name</strong>
+      <span id="profile-username" style="font-size: 16px; font-weight: 500;"></span><br>
+      <button onclick="changeName()" style="margin-top: 8px; background: orange; color: white; padding: 6px 14px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;">✏️ Edit</button>
+    </div>
+
+    <!-- Cash -->
+    <div style="margin-bottom: 24px;">
+      <strong style="display: block; margin-bottom: 4px;">💵 Cash</strong>
+      ₹<span id="profile-cash">0</span><br>
+      <button onclick="requestWithdrawal()" style="margin-top: 8px; background: #4caf50; color: white; padding: 6px 14px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;">Withdraw</button>
+    </div>
+
+    <!-- Delete Buttons -->
+    <div style="margin-top: 16px;">
+      <button id="delete-me-button" onclick="confirmDeleteUser()"
+              style="background:#e74c3c; color:#fff; padding:8px 16px;
+                     border:none; border-radius:24px; font-size: 14px; font-weight: 600;">
+        🗑️ Delete Me
+      </button>
+
+      <button id="cancel-delete-button" onclick="cancelPendingDeletion()"
+              style="display:none; background:#f39c12; color:#000; padding:8px 16px;
+                     border:none; border-radius:24px; font-size: 14px; font-weight: 600;">
+        ⏳ Cancel Deletion
+      </button>
+
+      <div id="delete-timer-display"
+           style="display:none; margin-top: 10px; color: #ff7675; font-weight: bold; font-size: 13px;">
+        ⏳ Deleting in: <span id="countdown-text">2h 00m 00s</span>
+      </div>
+    </div>
+
+    <!-- Back Button -->
+    <button id="back-btnc"
+            onclick="goToLevelSelect()"
+            style="margin-top: 28px; background: #ff7043; color: white; padding: 10px 20px;
+                   border: none; border-radius: 30px; font-weight: bold; font-size: 14px;">
+      ⬅ Back
+    </button>
+  </div>
+</div>
+
+  <!-- Game Over Screen -->
+  <div id="end-screen" class="screen">
+    <h1>Time's Up!</h1>
+    <div>Your Score: <span id="final-score"></span></div>
+    <button onclick="goToLevelSelect()">Play Again</button>
+  </div>
+   <div id="bonus-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#28a745; color:white; padding:10px 20px; border-radius:10px; font-size:24px; z-index:999;">
+  +3s
+</div>
+
+<!-- Confirm Delete Popup -->
+<div id="delete-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; padding:20px; border-radius:12px; z-index:9999; max-width:360px; width:90%; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,0.3);">
+  <h3>Delete Your Account?</h3>
+  <p>This will permanently delete your account in 2 hours.</p>
+  <button onclick="startDeleteCountdown()" style="background:#e74c3c; color:white; padding:10px 20px; margin:10px; border:none; border-radius:8px;">Yes</button>
+  <button onclick="cancelDeletePopup()" style="background:#3498db; color:white; padding:10px 20px; margin:10px; border:none; border-radius:8px;">No</button>
+</div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
