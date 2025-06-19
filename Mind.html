@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Word Finder Game</title>
+  <style>
+    @keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -30px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50px);
+  }
+}
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+    h1 {
+      color: #333;
+    }
+
+    .screen {
+      display: none;
+    }
+
+    .active {
+      display: block;
+    }
+
+    button, select {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+    }
+
+    select {
+      background-color: #fff;
+      border: 2px solid #007bff;
+      color: #007bff;
+    }
+
+    button {
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    #grid {
+      display: grid;
+      gap: 4px;
+      max-width: 90vw;
+      margin: 10px auto;
+      user-select: none;
+    }
+
+     .cell {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #fff;
+  border: 2px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: clamp(24px, 5vw, 40px);
+  letter-spacing: 1px;
+  touch-action: none;
+  }
+
+    .selected {
+      background: #ffe066;
+    }
+
+    .found {
+      background: #90ee90;
+      animation: pop 0.3s ease-in-out;
+    }
+
+    .fade-in {
+  animation: fadeIn 0.6s ease-in;
+}
+
+@media (max-width: 500px) {
+      .cell {
+        font-size: 16px;
+      }
+    }
+ .grid-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+  width: 100%;
+}
+
+#grid {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-width: 90vw;
+  user-select: none;
+  justify-content: center;
+}
+
+@media (min-width: 600px) {
+  #grid {
+    max-width: 500px;
+  }
+}
+
+.cell {
+  width: 100%;
+  aspect-ratio: 1;
+  font-size: clamp(18px, 3vw, 28px);
+}
+ </style>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(-45deg, #d0eaff, #a0d2eb, #b6e0fe, #e0f7fa);
+    background-size: 400% 400%;
+    animation: gradientFlow 15s ease infinite;
+    margin: 0;
+    padding: 0;
+    color: #333;
+  }
+
+  @keyframes gradientFlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .screen,
+  #confirm-reset-popup,
+  #password-prompt,
+  #bonus-popup,
+  #logout-popup,
+  #error-popup {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    padding: 20px;
+  }
+
+  button, select {
+    background: linear-gradient(to right, #007bff, #00c6ff);
+    color: white;
+    border-radius: 30px;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+  }
+
+  button:hover, button:active {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+  }
+
+  .cell {
+    border-radius: 10px;
+    box-shadow: inset 0 0 5px #ccc;
+  }
+
+  .selected {
+    background: #ffd166 !important;
+  }
+
+  .found {
+    background: #06d6a0 !important;
+    color: white;
+  }
+
+  input {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    margin: 5px;
+    width: 80%;
+    max-width: 300px;
+  }
+
+  h1, h2, h3 {
+    font-weight: 600;
+    color: #222;
+  }
+
+  #leaderboard ol {
+    padding-left: 0;
+    list-style-position: inside;
+  }
+
+#leaderboard li {
+  padding: 4px 0;
+  border-bottom: 1px solid #ddd;
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+<!-- Login/Signup UI -->
+<div id="auth-screen" class="screen login-screen active">
+  <h2>Login</h2>
+  <input id="loginUsername" type="text" placeholder="Username"><br>
+  <input id="loginPassword" type="password" placeholder="Password"><br>
+  <button onclick="login()">Login</button>
+
+  <h2>Sign Up</h2>
+  <input id="signupUsername" type="text" placeholder="Username"><br>
+  <input id="signupEmail" type="email" placeholder="Email"><br>
+  <input id="signupPassword" type="password" placeholder="Password"><br>
+  <button onclick="signup()">Sign Up</button>
+</div>
+
+<!-- Upi  pop up -->
+<div id="upiPopup" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); align-items:center; justify-content:center; z-index:999;">
+  <div style="background:white; padding:20px; border-radius:10px; text-align:center;">
+    <h3>Enter Your UPI ID</h3>
+    <input id="upiInput" type="text" placeholder="yourupi@bank"><br><br>
+    <button onclick="saveUPI()">Submit</button>
+  </div>
+</div>
+
+<!-- 💌 Message Screen -->
+<div id="message-screen" class="screen">
+  <h2>📩 Your Messages</h2>
+  <div id="message-list"></div>
+  <button onclick="goToLevelSelect()">⬅ Back</button>
+</div>
+
+
+<!-- Red popup for error alerts -->
+<div id="error-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#dc3545; color:white; padding:10px 20px; border-radius:10px; font-size:18px; z-index:999;">
+  Error
+</div>
+<!-- 💌 Message Screen Trigger and Level Select Page -->
+<div id="start-screen" class="screen fade-in">
+  <div style="max-width: 420px; margin: auto; padding: 32px 24px; background: rgba(18, 18, 18, 0.6); border-radius: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.4); backdrop-filter: blur(18px); text-align: center;">
+    
+    <h1 style="font-size: 34px; font-weight: 800; color: #ffffff; margin-bottom: 8px;">🎯 Word Finder</h1>
+    <p style="color: #ccc; font-size: 14px; margin-bottom: 24px;">Skill. Speed. Real Rewards.</p>
+
+    <!-- Messages Button -->
+    <button onclick="showMessages()" style="background: linear-gradient(135deg, #1e90ff, #00c6ff); padding: 12px 24px; border: none; border-radius: 30px; color: #fff; font-weight: bold; font-size: 16px; margin-bottom: 20px; position: relative;">
+      📨 Messages
+      <span id="msg-dot" style="display:none; position:absolute; top:-6px; right:-10px; background:#ff4757; color:white; font-size:12px; border-radius:50%; padding:2px 6px; font-weight:bold;"></span>
+    </button>
+
+    <!-- Difficulty -->
+    <h3 style="color: #fff; margin-bottom: 12px;">Choose Level</h3>
+    <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom: 24px;">
+      <button onclick="selectLevel('easy')" style="background:#27ae60; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">🌱 Easy</button>
+      <button onclick="selectLevel('medium')" style="background:#f39c12; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">✒️ Medium</button>
+      <button onclick="selectLevel('hard')" style="background:#c0392b; color:#fff; border:none; border-radius:30px; padding:10px 20px; font-weight:600;">🧠 Hard</button>
+    </div>
+
+    <!-- Start Game -->
+    <button id="start-button" onclick="startGame()" style="display:none; background:linear-gradient(to right, #00b894, #00cec9); color:#fff; font-weight: bold; font-size:16px; padding:12px 28px; border-radius:40px; border:none; margin-bottom: 16px;">🎮 Start Game</button>
+
+    <div id="selected-level" style="color: #eee; font-weight: 600;"></div>
+    <div id="leaderboard" style="margin-top: 20px;"></div>
+
+    <!-- Logout -->
+    <button onclick="confirmLogout()" style="margin-top: 30px; background: transparent; color: #ccc; border: 1px solid #444; border-radius: 30px; padding: 10px 20px; font-weight: 500;">🚪 Logout</button>
+  </div>
+</div>
+   
+<!-- 🔄 Loading Spinner -->
+<div id="loading-spinner" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:rgba(255,255,255,0.8); padding:20px; border-radius:12px; z-index:9999;">
+  <div class="spinner" style="border: 6px solid #ccc; border-top: 6px solid #007bff;
+  border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
+</div>
+
+<style>
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
+
+<!-- 🔐 Confirmation Popup -->
+<div id="confirm-reset-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; border:2px solid #333; padding:20px; border-radius:10px; z-index:999;">
+  <h3>Reset all users and their scores?</h3>
+  <button onclick="cancelReset()" style="background:#28a745; color:white; margin:5px;">No</button>
+  <button onclick="showPasswordPrompt()" style="background:#dc3545; color:white; margin:5px;">Yes</button>
+</div>
+
+<!-- 💵 Custom Withdrawal Popup -->
+<div id="withdrawal-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:white; padding:20px; border-radius:12px; border:2px solid #007bff; z-index:10000; max-width:300px; width:90%; text-align:center;">
+  <h3 style="margin-bottom:10px;">Withdraw Cash</h3>
+  <p id="withdraw-available" style="margin-bottom:10px;">Available: ₹0</p>
+  <input id="withdraw-amount" type="number" placeholder="Enter amount" min="10" style="width:100%; padding:8px; border-radius:8px; border:1px solid #ccc; margin-bottom:12px;">
+  <br>
+  <button onclick="submitWithdrawal()" style="background:#007bff; color:white; padding:8px 16px; border:none; border-radius:6px;">Submit</button>
+  <button onclick="closeWithdrawPopup()" style="background:#dc3545; color:white; padding:8px 16px; border:none; border-radius:6px; margin-left:10px;">Cancel</button>
+</div>
+
+<!-- 🔐 Password Entry Popup -->
+<div id="password-prompt" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; border:2px solid #333; padding:20px; border-radius:10px; z-index:999;">
+  <h3>Enter Admin Password</h3>
+  <input type="password" id="reset-password" placeholder="Enter Password" />
+  <br><br>
+  <button onclick="checkResetPassword()" style="background:#007bff; color:white;">OK</button>
+</div>
+
+  <!-- Game Screen -->
+  <div id="game-screen" class="screen">
+    <h1>Find the Words!</h1>
+    <div>Time Left: <span id="timer">0</span>s</div>
+    <div>Score: <span id="score">0</span></div>
+    <div>Find: <span id="words"></span></div>
+    <div class="grid-wrapper">
+  <div id="grid"></div>
+</div>
+  </div>
+<button id="profile-btn" onclick="openProfile()" style="position:absolute; top:20px; right:20px; visibility: hidden; opacity: 0; transition: opacity 0.3s ease;">👤 Profile</button>
+
+<div id="profile-screen" class="screen">
+  <div id="profile-card"
+       style="opacity: 0; transition: opacity 0.6s ease;
+              max-width: 360px; margin: 48px auto;
+              padding: 24px 20px;
+              background: #444; border-radius: 16px;
+              box-shadow: 0 12px 25px rgba(0,0,0,0.3);
+              text-align: center; color: white;">
+
+    <h2 style="font-size: 24px; margin-bottom: 20px;">👤 Profile</h2>
+
+    <!-- Avatar and Button Row -->
+    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 24px;">
+      <img id="avatar-img"
+           src="https://via.placeholder.com/100"
+           alt="Avatar"
+           style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #ccc;" />
+
+      <button onclick="changeAvatar()"
+              style="background: #00c6ff; border: none;
+                     padding: 10px 16px; border-radius: 30px; color: white;
+                     font-weight: 600; font-size: 14px;">
+        📷 Change Avatar
+      </button>
+    </div>
+
+    <!-- Username -->
+    <div style="margin-bottom: 20px;">
+      <strong style="display: block; margin-bottom: 4px;">Name</strong>
+      <span id="profile-username" style="font-size: 16px; font-weight: 500;"></span><br>
+      <button onclick="changeName()" style="margin-top: 8px; background: orange; color: white; padding: 6px 14px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;">✏️ Edit</button>
+    </div>
+
+    <!-- Cash -->
+    <div style="margin-bottom: 24px;">
+      <strong style="display: block; margin-bottom: 4px;">💵 Cash</strong>
+      ₹<span id="profile-cash">0</span><br>
+      <button onclick="requestWithdrawal()" style="margin-top: 8px; background: #4caf50; color: white; padding: 6px 14px; border-radius: 20px; border: none; font-weight: 600; font-size: 13px;">Withdraw</button>
+    </div>
+
+    <!-- Delete Buttons -->
+    <div style="margin-top: 16px;">
+      <button id="delete-me-button" onclick="confirmDeleteUser()"
+              style="background:#e74c3c; color:#fff; padding:8px 16px;
+                     border:none; border-radius:24px; font-size: 14px; font-weight: 600;">
+        🗑️ Delete Me
+      </button>
+
+      <button id="cancel-delete-button" onclick="cancelPendingDeletion()"
+              style="display:none; background:#f39c12; color:#000; padding:8px 16px;
+                     border:none; border-radius:24px; font-size: 14px; font-weight: 600;">
+        ⏳ Cancel Deletion
+      </button>
+
+      <div id="delete-timer-display"
+           style="display:none; margin-top: 10px; color: #ff7675; font-weight: bold; font-size: 13px;">
+        ⏳ Deleting in: <span id="countdown-text">2h 00m 00s</span>
+      </div>
+    </div>
+
+    <!-- Back Button -->
+    <button id="back-btnc"
+            onclick="goToLevelSelect()"
+            style="margin-top: 28px; background: #ff7043; color: white; padding: 10px 20px;
+                   border: none; border-radius: 30px; font-weight: bold; font-size: 14px;">
+      ⬅ Back
+    </button>
+  </div>
+</div>
+
+  <!-- Game Over Screen -->
+  <div id="end-screen" class="screen">
+    <h1>Time's Up!</h1>
+    <div>Your Score: <span id="final-score"></span></div>
+    <button onclick="goToLevelSelect()">Play Again</button>
+  </div>
+   <div id="bonus-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#28a745; color:white; padding:10px 20px; border-radius:10px; font-size:24px; z-index:999;">
+  +3s
+</div>
+
+<!-- Confirm Delete Popup -->
+<div id="delete-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:#fff; padding:20px; border-radius:12px; z-index:9999; max-width:360px; width:90%; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,0.3);">
+  <h3>Delete Your Account?</h3>
+  <p>This will permanently delete your account in 2 hours.</p>
+  <button onclick="startDeleteCountdown()" style="background:#e74c3c; color:white; padding:10px 20px; margin:10px; border:none; border-radius:8px;">Yes</button>
+  <button onclick="cancelDeletePopup()" style="background:#3498db; color:white; padding:10px 20px; margin:10px; border:none; border-radius:8px;">No</button>
+</div>
+
+<script>
+console.log("🔥 Page started");
+
+window.onerror = function (message, source, lineno, colno, error) {
+  console.error("🚨 Global Error:", message, "at", source + ":" + lineno);
+  return false;
+};
+</script>
+
+  <script>
+window.currentLevel = "easy";
+window.gridSize = 10;
+window.dirR = null;
+window.dirC = null;
+ window.timeLeft = 0;
+
+  </script>
+<script>
+  window.selectLevel = async function (level) {
+  selectedDifficulty = level;
+  document.getElementById("selected-level").innerText = `Selected: ${level.toUpperCase()}`;
+  document.getElementById("start-button").style.display = "inline-block";
+  await showLeaderboard(level);
+};
+
+  window.goToLevelSelect = async function () {
+  // Hide ALL screens first
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+
+  // Show level selector screen
+  startScreen.classList.add("active");
+
+  // Refresh leaderboard
+  await showLeaderboard(selectedDifficulty);
+  toggleProfileButton();
+};
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
+
+<div id="logout-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+background:white; padding:20px; border-radius:10px; border:2px solid #333; z-index:999;">
+  <h3>Are you sure you want to logout?</h3>
+  <button onclick="logoutUser()" style="background:#28a745; color:white; margin:5px;">Yes</button>
+  <button onclick="cancelLogout()" style="background:#dc3545; color:white; margin:5px;">No</button>
+</div>
+ <script type="module">
+  window.currentLevel = "easy";
+  window.selectedDifficulty = "easy";
+  window.currentUser = null;
+  window.wordsToFind = [];
+  window.userCash = 0;
+  window.timeLeft = 0;
+  window.gridSize = 10;
+  window.countdown = null;
+  window.score = 0;
+  window.selectedCells = [];
+  window.foundWords = [];
+  window.cells = [];
+  window.isDragging = false;
+  window.dirR = null;
+  window.dirC = null;
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, child, remove, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+   import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    sendEmailVerification,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDqsWJgwX-vWIawPZt0XTnQHSE9AqwczkE",
+    authDomain: "word-finder-346db.firebaseapp.com",
+    databaseURL: "https://word-finder-346db-default-rtdb.firebaseio.com",
+    projectId: "word-finder-346db",
+    storageBucket: "word-finder-346db.appspot.com",
+    messagingSenderId: "129230255125",
+    appId: "1:129230255125:web:39632d82bb30c55c318a1c"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window.db = getDatabase(app);
+  const auth = getAuth();
+  
+  window.ref = ref;
+window.get = get;
+window.set = set;
+window.child = child;
+window.remove = remove;
+window.push = push;
+window.getDatabase = getDatabase;
+
+  window.wordLists = {
+  easy: ["DOG", "CAT", "SUN", "BALL", "ANT", "BAT", "HEN", "PEN", "BEE", "HAT"],
+  medium: ["APPLE", "HOUSE", "MANGO", "SCHOOL", "PENCIL", "ZEBRA", "GUITAR", "BOTTLE"],
+  hard: ["ELEPHANT", "PHONE", "NOTEBOOK", "MICRO", "PYRAMID", "FLOWER", "COMPUTER"]
+};
+
+window.letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+window.startScreen = document.getElementById("start-screen");
+window.gameScreen = document.getElementById("game-screen");
+window.endScreen = document.getElementById("end-screen");
+
+window.wordList = document.getElementById("words");
+window.scoreDisplay = document.getElementById("score");
+window.finalScore = document.getElementById("final-score");
+window.timerDisplay = document.getElementById("timer");
+window.grid = document.getElementById("grid");
+
+
+window.updateCashUI = function () {
+  const cashDisplay = document.getElementById("profile-cash");
+  if (cashDisplay) cashDisplay.textContent = userCash.toFixed(2);
+};
+
+window.signup = async () => {
+    const email = document.getElementById("signupEmail").value;
+    const password = document.getElementById("signupPassword").value;
+    const username = document.getElementById("signupUsername").value;
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await sendEmailVerification(userCredential.user);
+      await set(ref(db, "usernames/" + username), { email });
+
+      alert("Account created. Please verify your email before logging in.");
+    } catch (error) {
+      alert("Signup error: " + error.message);
+    }
+  };
+
+  window.login = async () => {
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
+
+    try {
+      const snapshot = await get(ref(db, "usernames/" + username));
+      if (!snapshot.exists()) return alert("Username not found.");
+
+      const email = snapshot.val().email;
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      if (!user.emailVerified) {
+        alert("Please verify your email before logging in.");
+        return;
+      }
+
+      const upiSnapshot = await get(ref(db, "users/" + user.uid + "/upi"));
+      if (!upiSnapshot.exists()) {
+        document.getElementById("upiPopup").style.display = "flex";
+      } else {
+        startGame(user.uid);
+      }
+
+    } catch (error) {
+      alert("Login error: " + error.message);
+    }
+  };
+
+  window.saveUPI = async () => {
+    const upi = document.getElementById("upiInput").value;
+    const user = auth.currentUser;
+    if (!user) return;
+
+    await update(ref(db, "users/" + user.uid), { upi });
+    document.getElementById("upiPopup").style.display = "none";
+    startGame(user.uid);
+  };
+
+  function startGame(uid) {
+    window.currentUser = uid;
+    localStorage.setItem("wordFinderCurrentUser", uid);
+    document.querySelector(".screen.login-screen")?.classList.remove("active");
+    document.getElementById("start-screen")?.classList.add("active");
+
+    // load cash if stored
+    get(ref(db, "users/" + uid + "/cashEarned")).then(snapshot => {
+      window.userCash = snapshot.exists() ? snapshot.val() : 0;
+      updateCashUI();
+    });
+
+    checkUnreadMessages?.();
+    listenForLiveMessages?.();
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    // Optional: auto-reconnect logic
+  });
+
+window.showError = function(msg) {
+  const popup = document.getElementById("error-popup");
+  popup.textContent = msg;
+  popup.style.display = "block";
+  popup.style.animation = "fadeUp 1s ease-out";
+  setTimeout(() => {
+    popup.style.display = "none";
+  }, 1000);
+}
+
+window.listenForLiveMessages = function () {
+  const msgRef = ref(db, `messages/${window.currentUser}`);
+  onValue(msgRef, (snap) => {
+    const messages = snap.exists() ? snap.val() : [];
+    const unreadCount = messages.filter(m => !m.read).length;
+
+    const dot = document.getElementById("msg-dot");
+    if (dot) {
+      if (unreadCount > 0) {
+        dot.style.display = "inline-block";
+        dot.textContent = unreadCount > 9 ? "9+" : unreadCount;
+      } else {
+        dot.style.display = "none";
+        dot.textContent = "";
+      }
+    }
+  });
+};
+
+window.startGame = function () {
+window._gameOver = false;
+  // Prevent back navigation
+history.pushState(null, null, location.href);
+window.onpopstate = function () {
+  history.pushState(null, null, location.href);
+  alert("🚫 You can't go back during the game!");
+};
+  console.log("Selected difficulty is:", window.selectedDifficulty);
+  showSpinner();
+
+  setTimeout(async () => {
+    const level = selectedDifficulty;
+    currentLevel = level;
+    let wordPool = wordLists[level];
+    wordsToFind = [];
+
+    while (wordsToFind.length < 5) {
+      const word = wordPool[Math.floor(Math.random() * wordPool.length)];
+      if (!wordsToFind.includes(word)) wordsToFind.push(word);
+    }
+
+    startScreen.classList.remove("active");
+    gameScreen.classList.add("active", "fade-in");
+    toggleProfileButton();
+    setTimeout(() => gameScreen.classList.remove("fade-in"), 600);
+
+    if (level === "easy") {
+      timeLeft = 30;
+      gridSize = 5;
+    } else if (level === "medium") {
+      timeLeft = 60;
+      gridSize = 7;
+    } else if (level === "hard") {
+      timeLeft = 120;
+      gridSize = 9;
+    }
+
+    grid.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+
+    clearInterval(countdown);
+    timerDisplay.textContent = timeLeft;
+    countdown = setInterval(() => {
+      timeLeft--;
+      timerDisplay.textContent = timeLeft;
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+
+    score = 0;
+    scoreDisplay.textContent = "0";
+
+    wordList.innerHTML = wordsToFind.map(w => `<span>${w}</span>`).join(" ");
+    selectedCells = [];
+    foundWords = [];
+    await loadEmojiTheme();
+    buildGrid();
+    hideSpinner();
+  }, 500);
+}
+
+window.showSpinner = function () {
+  document.getElementById("loading-spinner").style.display = "block";
+}
+
+window.hideSpinner =  function () {
+  document.getElementById("loading-spinner").style.display = "none";
+}
+
+window.buildGrid = function () {
+      grid.innerHTML = "";
+      cells = [];
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.textContent = letters[Math.floor(Math.random() * letters.length)];
+        cell.dataset.index = i;
+        grid.appendChild(cell);
+        cells.push(cell);
+      }
+      for (const word of wordsToFind) placeWord(word);
+    }
+
+  window.updateHighScore = async function (level, newScore) {
+    if (!window.currentUser) return;
+    const userRef = ref(db, 'users/' + window.currentUser);
+    const snapshot = await get(userRef);
+    const user = snapshot.val();
+
+    if (!user) return;
+    const currentBest = user.scores?.[level] || 0;
+    if (newScore > currentBest) {
+      user.scores[level] = newScore;
+      await set(userRef, user);
+    }
+  };
+
+
+window.confirmLogout = function () {
+  document.getElementById("logout-popup").style.display = "block";
+}
+
+window.logoutUser = function () {
+  localStorage.removeItem("wordFinderCurrentUser");
+  window.currentUser = null;
+  window.onpopstate = null;
+
+  document.getElementById("logout-popup").style.display = "none";
+
+  const authScreen = document.getElementById("auth-screen");
+  const startScreen = document.getElementById("start-screen");
+
+  startScreen.classList.remove("active");
+  authScreen.classList.add("active", "fade-in");
+  toggleProfileButton();
+
+  // Remove fade-in class after animation
+  setTimeout(() => authScreen.classList.remove("fade-in"), 600);
+}
+
+window.loadEmojiTheme = async function () {
+  // 🧹 Remove existing emoji layer if present
+  const existingLayer = document.getElementById("emoji-bg-layer");
+  if (existingLayer) existingLayer.remove();
+
+  const emojiSnap = await get(child(ref(db), "emojiEvents"));
+  if (!emojiSnap.exists()) return;
+
+  const emojis = emojiSnap.val().filter(e => e.trim() !== "");
+  if (emojis.length === 0) return;
+
+  const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+  const gameScreen = document.getElementById("game-screen");
+
+  const emojiLayer = document.createElement("div");
+  emojiLayer.id = "emoji-bg-layer";
+  emojiLayer.style.position = "absolute";
+  emojiLayer.style.top = "0";
+  emojiLayer.style.left = "0";
+  emojiLayer.style.width = "100%";
+  emojiLayer.style.height = "100%";
+  emojiLayer.style.zIndex = "0";
+  emojiLayer.style.pointerEvents = "none";
+  emojiLayer.style.overflow = "hidden";
+
+  for (let i = 0; i < 40; i++) {
+    const emojiElem = document.createElement("div");
+    emojiElem.textContent = emoji;
+    emojiElem.style.position = "absolute";
+    emojiElem.style.left = Math.random() * 100 + "%";
+    emojiElem.style.top = Math.random() * 100 + "%";
+    emojiElem.style.fontSize = (Math.random() * 30 + 10) + "px";
+    emojiElem.style.opacity = 0.2 + Math.random() * 0.3;
+    emojiElem.style.transform = `rotate(${Math.random() * 360}deg)`;
+    emojiLayer.appendChild(emojiElem);
+  }
+
+  // Soft background color to match emoji theme
+  gameScreen.style.background = "linear-gradient(135deg, #ffffff, #e0f7ff)";
+  gameScreen.style.position = "relative";
+  gameScreen.prepend(emojiLayer);
+};
+
+window.cancelLogout = function () {
+  document.getElementById("logout-popup").style.display = "none";
+}
+
+window.cancelReset = function () {
+  document.getElementById("confirm-reset-popup").style.display = "none";
+  goToLevelSelect(); // ⬅️ this sends back to level selection
+}
+
+  window.showLeaderboard = async function (level) {
+    const snapshot = await get(ref(db, 'users'));
+    const users = snapshot.val() || {};
+    let leaderboardArr = [];
+
+    for (let uid in users) {
+      const user = users[uid];
+      const score = user.scores?.[level] || 0;
+      leaderboardArr.push({
+  username: user.username,
+  score,
+  avatar: user.avatar || null
+});
+    }
+
+    leaderboardArr.sort((a, b) => b.score - a.score);
+    leaderboardArr = leaderboardArr.slice(0, 3);
+
+    let boardHTML = `<h3>${level.toUpperCase()} Leaderboard</h3>`;
+if (leaderboardArr.length === 0) {
+  boardHTML += `<p>No scores yet!</p>`;
+} else {
+  boardHTML += `<ol>`;
+  leaderboardArr.forEach((entry, index) => {
+    const avatar = entry.avatar || "https://via.placeholder.com/64";
+    const rankIcon = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : "";
+
+    boardHTML += `
+      <li style="display: flex; align-items: center; margin-bottom: 10px; padding: 4px 0; border-bottom: 1px solid #eee;">
+        <span style="font-size: 18px; margin-right: 8px;">${rankIcon}</span>
+        <img src="${avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:10px;">
+        <span style="flex: 1; font-weight: 500;">${entry.username}</span>
+        <span style="font-weight: bold;">${entry.score}</span>
+      </li>`;
+  });
+  boardHTML += `</ol>`; // ✅ this was missing!
+}
+
+document.getElementById("leaderboard").innerHTML = boardHTML;
+};
+
+window.placeWord = async function (word) {
+  let placed = false;
+  const directions = [
+    { r: 0,  c: 1 },   // →
+    { r: 0,  c: -1 },  // ←
+    { r: 1,  c: 0 },   // ↓
+    { r: -1, c: 0 },   // ↑
+    { r: 1,  c: 1 },   // ↘
+    { r: 1,  c: -1 },  // ↙
+    { r: -1, c: 1 },   // ↗
+    { r: -1, c: -1 }   // ↖
+  ];
+
+  let attempts = 0;
+  while (!placed && attempts < 100) {
+    attempts++;
+
+    const dir = directions[Math.floor(Math.random() * directions.length)];
+    const maxStartRow = dir.r === -1 ? word.length - 1 : gridSize - (dir.r * (word.length - 1)) - 1;
+    const maxStartCol = dir.c === -1 ? word.length - 1 : gridSize - (dir.c * (word.length - 1)) - 1;
+
+    const row = Math.floor(Math.random() * (maxStartRow + 1));
+    const col = Math.floor(Math.random() * (maxStartCol + 1));
+
+    let canPlace = true;
+    let indices = [];
+
+    for (let i = 0; i < word.length; i++) {
+      const r = row + dir.r * i;
+      const c = col + dir.c * i;
+      const index = r * gridSize + c;
+
+      if (
+        r < 0 || r >= gridSize || c < 0 || c >= gridSize ||
+        (cells[index].dataset.locked && cells[index].textContent !== word[i])
+      ) {
+        canPlace = false;
+        break;
+      }
+      indices.push(index);
+    }
+
+    if (canPlace) {
+      for (let i = 0; i < word.length; i++) {
+        const idx = indices[i];
+        cells[idx].textContent = word[i];
+        cells[idx].dataset.locked = "true";
+      }
+      placed = true;
+    }
+  }
+
+  if (!placed) {
+    console.warn(`⚠️ Could not place word: ${word}`);
+  }
+}
+
+window.showMessages = async function () {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("message-screen").classList.add("active");
+  toggleProfileButton();
+
+  const msgRef = ref(db, `messages/${window.currentUser}`);
+  const snap = await get(msgRef);
+  const messages = snap.exists() ? snap.val() : [];
+
+  const container = document.getElementById("message-list");
+  if (messages.length === 0) {
+    container.innerHTML = "<p>No messages yet.</p>";
+  } else {
+    container.innerHTML = messages.map((m, i) => `
+      <div style="background:#f1f1f1;padding:10px;margin-bottom:10px;border-radius:8px;">
+        <p>${m.text}</p>
+        <small>${new Date(m.time).toLocaleString()}</small><br>
+        <button onclick="deleteMessage(${i})" style="margin-top:5px;background:#dc3545;color:white;border:none;border-radius:6px;padding:6px;">🗑 Delete</button>
+      </div>
+    `).reverse().join("");
+  }
+
+  // ✅ Mark all as read
+  const updatedMessages = messages.map(m => ({ ...m, read: true }));
+  await set(msgRef, updatedMessages);
+
+  // ✅ Hide red dot
+  const dot = document.getElementById("msg-dot");
+  if (dot) {
+    dot.style.display = "none";
+    dot.textContent = "";
+  }
+};
+
+window.checkUnreadMessages = async function () {
+  if (!window.currentUser) return;
+  const msgRef = ref(db, `messages/${window.currentUser}`);
+  const snap = await get(msgRef);
+  const messages = snap.exists() ? snap.val() : [];
+
+  const unreadCount = messages.filter(m => !m.read).length;
+
+  const dot = document.getElementById("msg-dot");
+  if (dot) {
+    if (unreadCount > 0) {
+      dot.style.display = "inline-block";
+      dot.textContent = unreadCount > 9 ? "9+" : unreadCount;
+    } else {
+      dot.style.display = "none";
+      dot.textContent = "";
+    }
+  }
+};
+
+window.endGame = async function (didWin = false) {
+  if (window._gameOver) return;
+  window._gameOver = true;
+
+  clearInterval(window.countdown);
+  window.onpopstate = null;
+
+  let timeBonus = window.timeLeft * 2;
+  let wordScore = (5 - window.wordsToFind.length) * 10;
+  let totalScore = wordScore + timeBonus;
+
+  await window.updateHighScore(window.currentLevel, totalScore);
+  await window.showLeaderboard(window.currentLevel);
+
+  window.gameScreen.classList.remove("active");
+  window.endScreen.classList.add("active");
+
+  window.finalScore.textContent = totalScore;
+
+  // 🧠 Show proper message
+  if (didWin) {
+    window.endScreen.querySelector("h1").textContent = "🎉 You Found All Words!";
+
+    // 🎉 Confetti for hard level
+    if (window.currentLevel === "hard") {
+      confetti({
+        particleCount: 150,
+        spread: 90,
+        origin: { y: 0.6 }
+      });
+    }
+
+    // 💰 Only give cash on win
+    // 💰 Cash based on difficulty
+   let cashEarnedThisGame = 0;
+   if (window.currentLevel === "easy") cashEarnedThisGame = 0.05;
+   else if (window.currentLevel === "medium") cashEarnedThisGame = 0.07;
+   else if (window.currentLevel === "hard") cashEarnedThisGame = 0.10;
+    window.userCash += cashEarnedThisGame;
+
+    const userRef = window.ref(window.db, 'users/' + window.currentUser);
+    const snapshot = await window.get(userRef);
+    const user = snapshot.val();
+
+    if (user) {
+      user.cashEarned = window.userCash;
+      await window.set(userRef, user);
+    }
+
+    const cash = document.getElementById("cash-earned");
+    if (cash) cash.textContent = userCash.toFixed(2);
+    window.showError(`+₹${cashEarnedThisGame} cash earned!`);
+  } else {
+    window.endScreen.querySelector("h1").textContent = "⏱ Time's Up!";
+  }
+};
+
+window.deleteMessage = async function (index) {
+  const msgRef = ref(db, `messages/${window.currentUser}`);
+  const snap = await get(msgRef);
+  const messages = snap.exists() ? snap.val() : [];
+
+  // Delete from array
+  messages.splice(index, 1);
+  await set(msgRef, messages);
+
+  // Refresh view
+  showMessages();
+};
+ 
+window.checkWord = function () {
+  const formedWord = selectedCells.map(c => c.textContent).join("");
+
+  if (wordsToFind.includes(formedWord)) {
+    selectedCells.forEach(c => {
+      c.classList.remove("selected");
+      c.classList.add("found");
+    });
+
+    // ⏱️ Bonus time when word is found
+    let bonus = 0;
+    if (currentLevel === "easy") bonus = 3;
+    else if (currentLevel === "medium") bonus = 5;
+    else if (currentLevel === "hard") bonus = 7;
+
+    timeLeft += bonus;
+    timerDisplay.textContent = timeLeft;
+
+    // 🎉 Bonus popup
+    const popup = document.getElementById("bonus-popup");
+    popup.textContent = `+${bonus}s`;
+    popup.style.display = "block";
+    popup.style.animation = "fadeUp 1s ease-out";
+    setTimeout(() => {
+      popup.style.display = "none";
+    }, 1000);
+
+    // ✅ Remove found word
+    const index = wordsToFind.indexOf(formedWord);
+    if (index !== -1) {
+      wordsToFind.splice(index, 1);
+      wordList.innerHTML = wordsToFind.map(w => `<span>${w}</span>`).join(" ");
+    }
+
+    // ✅ Recalculate live score
+    let wordScore = (5 - wordsToFind.length) * 10;
+    let totalScore = wordScore + timeLeft * 2;
+    scoreDisplay.textContent = totalScore;
+
+    // ✅ Auto-end if all found
+    if (wordsToFind.length === 0) {
+  setTimeout(() => endGame(true), 500);
+    }
+  } else {
+    clearSelection();
+  }
+}
+
+window.clearSelection = function () {
+  selectedCells.forEach(c => c.classList.remove("selected"));
+  selectedCells = [];
+  dirR = dirC = null;
+}
+
+window.onload = async function () {
+
+const storedUser = localStorage.getItem("wordFinderCurrentUser");
+if (storedUser) {
+  localStorage.removeItem(`withdrawal-${storedUser}`);
+}
+  // DOM elements
+  window.startScreen = document.getElementById("start-screen");
+  window.gameScreen = document.getElementById("game-screen");
+  window.endScreen = document.getElementById("end-screen");
+  window.grid = document.getElementById("grid");
+  window.timerDisplay = document.getElementById("timer");
+  window.scoreDisplay = document.getElementById("score");
+  window.finalScore = document.getElementById("final-score");
+  window.wordList = document.getElementById("words");
+
+  // Mouse Events
+  window.grid.addEventListener("mousedown", e => {
+    window.isDragging = true;
+    if (e.target.classList.contains("cell")) {
+      window.clearSelection();
+      window.selectCell(e.target);
+    }
+  });
+
+  window.grid.addEventListener("mousemove", e => {
+    if (window.isDragging && e.target.classList.contains("cell")) {
+      window.selectCell(e.target);
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (window.isDragging) {
+      window.checkWord();
+      window.isDragging = false;
+    }
+  });
+
+  // Touch Events
+  window.grid.addEventListener("touchstart", e => {
+    window.isDragging = true;
+    const cell = window.getCellFromTouch ? window.getCellFromTouch(e) : null;
+    if (cell) {
+      window.clearSelection();
+      window.selectCell(cell);
+    }
+  });
+
+  window.grid.addEventListener("touchmove", e => {
+    const cell = window.getCellFromTouch ? window.getCellFromTouch(e) : null;
+    if (cell) window.selectCell(cell);
+  });
+
+  window.grid.addEventListener("touchend", () => {
+    window.checkWord();
+    window.isDragging = false;
+  });
+
+  // Restore logged in user
+  const savedUser = localStorage.getItem("wordFinderCurrentUser");
+if (savedUser) {
+  const snapshot = await window.get(window.child(window.ref(window.getDatabase()), "users/" + savedUser));
+  if (snapshot.exists()) {
+    const userData = snapshot.val();
+    window.currentUser = savedUser;
+    window.userCash = userData.cashEarned || 0;
+
+    updateCashUI();
+
+    window.startScreen.classList.add("active");
+    document.getElementById("auth-screen").classList.remove("active");
+
+    await checkUnreadMessages();   // 🔍 One-time check
+    listenForLiveMessages();       // 🔴 Real-time updates
+    toggleProfileButton();
+
+const userRef = ref(db, 'users/' + currentUser);
+const deleteSnap = await get(ref(db, 'users/' + currentUser));
+if (deleteSnap.exists()) {
+  const user = deleteSnap.val();
+  if (user.deleteUntil && Date.now() < user.deleteUntil) {
+    activateFirebaseDeleteLock(user.deleteUntil);
+  }
+}
+
+  } else {
+    localStorage.removeItem("wordFinderCurrentUser");
+  }
+}
+};
+
+window.loadMessages = async function () {
+  if (!window.currentUser) return;
+  if (!document.getElementById("start-screen").classList.contains("active")) return;
+
+  const msgRef = ref(db, `messages/${window.currentUser}`);
+  const snap = await get(msgRef);
+  const messages = snap.exists() ? snap.val() : [];
+
+  const listDiv = document.getElementById("message-list");
+  listDiv.innerHTML = messages.length === 0
+    ? "<p>No messages yet.</p>"
+    : messages.map(m => `<p>📝 ${m.text}<br><small>${new Date(m.time).toLocaleString()}</small></p>`).reverse().join("<hr>");
+
+  document.getElementById("message-popup").style.display = "block";
+};
+
+window.selectCell = function (cell) {
+  if (!cell || window.selectedCells.includes(cell)) return;
+
+  if (window.selectedCells.length === 0) {
+    window.selectedCells.push(cell);
+    cell.classList.add("selected");
+  } else {
+    const last = window.selectedCells[window.selectedCells.length - 1];
+    const lastIdx = +last.dataset.index;
+    const newIdx = +cell.dataset.index;
+
+    const lastRow = Math.floor(lastIdx / window.gridSize);
+    const lastCol = lastIdx % window.gridSize;
+    const newRow = Math.floor(newIdx / window.gridSize);
+    const newCol = newIdx % window.gridSize;
+
+    const deltaR = newRow - lastRow;
+    const deltaC = newCol - lastCol;
+
+    // On second cell, set direction
+    if (window.selectedCells.length === 1) {
+      window.dirR = deltaR;
+      window.dirC = deltaC;
+    }
+
+    // After second, ensure direction matches
+    if (deltaR === window.dirR && deltaC === window.dirC) {
+      window.selectedCells.push(cell);
+      cell.classList.add("selected");
+    }
+  }
+};
+
+window.getCellFromTouch = function (e) {
+  const touch = e.touches[0];
+  const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (elem && elem.classList.contains("cell")) return elem;
+  return null;
+};
+
+  window.requestWithdrawal = function () {
+  // ⛔ Check if user already withdrew today
+  const today = new Date().toDateString();
+  const lastWithdrawKey = `withdrawal-${window.currentUser}`;
+  if (localStorage.getItem(lastWithdrawKey) === today) {
+    showError("⛔ You can only withdraw once per day.");
+    return;
+  }
+
+  if (window.userCash < 10) {
+    showError("Minimum ₹10 required to withdraw.");
+    return;
+  }
+
+  document.getElementById("withdraw-amount").value = "";
+  document.getElementById("withdraw-available").textContent = `Available: ₹${window.userCash.toFixed(2)}`;
+  document.getElementById("withdrawal-popup").style.display = "block";
+};
+
+
+window.closeWithdrawPopup = function () {
+  document.getElementById("withdrawal-popup").style.display = "none";
+};
+
+window.submitWithdrawal = async function () {
+  const amount = parseFloat(document.getElementById("withdraw-amount").value);
+
+  // ❌ Invalid amount
+  if (isNaN(amount) || amount <= 0) {
+    closeWithdrawPopup(); // 👈 Add this before error
+    showError("⛔ Enter a valid amount.");
+    return;
+  }
+
+  if (amount > window.userCash) {
+    closeWithdrawPopup();
+    showError("⛔ Amount exceeds available cash.");
+    return;
+  }
+
+  if (amount < 10) {
+    closeWithdrawPopup();
+    showError("⛔ Minimum ₹10 required.");
+    return;
+  }
+
+  const userRef = ref(db, 'users/' + window.currentUser);
+  const snapshot = await get(userRef);
+  const user = snapshot.val();
+
+  if (!user || !user.wallet || user.wallet.trim() === "") {
+    closeWithdrawPopup();
+    showError("No wallet found. Please add it at signup.");
+    return;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const withdrawalHistory = user.withdrawalHistory || {};
+  const todayCount = withdrawalHistory[today] || 0;
+
+  if (todayCount >= 3) {
+    closeWithdrawPopup();
+    showError("⛔ Maximum 3 withdrawals allowed per day.");
+    return;
+  }
+
+  // ✅ All good — submit request
+  const withdrawalRef = push(ref(db, 'withdrawRequests'));
+  await set(withdrawalRef, {
+    userId: window.currentUser,
+    username: user.username,
+    amount,
+    wallet: user.wallet,
+    status: "pending",
+    requestedAt: new Date().toISOString()
+  });
+
+  window.userCash -= amount;
+  user.cashEarned = window.userCash;
+  withdrawalHistory[today] = todayCount + 1;
+  user.withdrawalHistory = withdrawalHistory;
+
+  await set(userRef, user);
+  updateCashUI();
+
+  showError(`✅ ₹${amount.toFixed(2)} withdrawal request submitted!`);
+  closeWithdrawPopup();
+};
+
+window.openProfile = async function () {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+
+  const profileScreen = document.getElementById("profile-screen");
+  const profileCard = document.getElementById("profile-card");
+  const avatarImg = document.getElementById("avatar-img");
+
+  profileCard.style.opacity = "0";
+  profileScreen.classList.add("active");
+
+  const snapshot = await get(child(ref(db), 'users/' + currentUser));
+  const user = snapshot.val();
+
+  document.getElementById("profile-username").textContent = user.username;
+  document.getElementById("profile-cash").textContent = (user.cashEarned || 0).toFixed(2);
+
+  avatarImg.onload = () => {
+    profileCard.classList.add("fade-in");
+    profileCard.style.opacity = "1";
+    setTimeout(() => profileCard.classList.remove("fade-in"), 700);
+  };
+
+  avatarImg.src = user.avatar || "https://via.placeholder.com/100";
+
+  if (avatarImg.complete) {
+    profileCard.classList.add("fade-in");
+    profileCard.style.opacity = "1";
+    setTimeout(() => profileCard.classList.remove("fade-in"), 700);
+  }
+
+  toggleProfileButton();
+};
+
+
+window.changeName = async function () {
+  const newName = prompt("Enter new name:");
+  if (!newName) return;
+
+  const userRef = ref(db, 'users/' + currentUser);
+  const snapshot = await get(userRef);
+  const user = snapshot.val();
+  user.username = newName;
+  await set(userRef, user);
+
+  document.getElementById("profile-username").textContent = newName;
+  showError("✅ Name changed!");
+};
+
+window.changeAvatar = async function () {
+  const today = new Date().toDateString();
+  const lastChangeKey = `avatar-change-${currentUser}`;
+  const lastChange = localStorage.getItem(lastChangeKey);
+
+  if (lastChange === today) {
+    showError("⛔ You can only change avatar once per day.");
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      const img = new Image();
+
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          showError("❌ Could not get canvas context.");
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+
+        try {
+          const userRef = ref(db, 'users/' + currentUser);
+          const snapshot = await get(userRef);
+          if (!snapshot.exists()) {
+            showError("❌ User not found.");
+            return;
+          }
+
+          const user = snapshot.val();
+          user.avatar = dataUrl;
+          await set(userRef, user);
+
+          document.getElementById("avatar-img").src = dataUrl;
+          localStorage.setItem(lastChangeKey, today);
+          showError("✅ Avatar updated!");
+        } catch (err) {
+          console.error(err);
+          showError("❌ Failed to save avatar.");
+        }
+      };
+
+      img.onerror = () => {
+        showError("❌ Failed to load the selected image.");
+      };
+
+      img.src = reader.result;
+    };
+
+    reader.onerror = () => {
+      showError("❌ Failed to read the selected file.");
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  input.click();
+};
+
+window.toggleProfileButton = function () {
+  const isStartScreenActive = document.getElementById("start-screen").classList.contains("active");
+  const profileBtn = document.getElementById("profile-btn");
+  if (!profileBtn) return;
+
+  if (isStartScreenActive) {
+    profileBtn.style.visibility = "visible";
+    profileBtn.style.opacity = "1";
+  } else {
+    profileBtn.style.opacity = "0";
+    setTimeout(() => {
+      profileBtn.style.visibility = "hidden";
+    }, 300); // Matches transition duration
+  }
+};
+
+let deleteTimer = null;
+let deleteEndTime = null;
+
+window.confirmDeleteUser = function () {
+  document.getElementById("delete-popup").style.display = "block";
+};
+
+window.cancelDeletePopup = function () {
+  document.getElementById("delete-popup").style.display = "none";
+};
+
+window.startDeleteCountdown = async function () {
+  document.getElementById("delete-popup").style.display = "none";
+
+  const now = Date.now();
+  const deleteUntil = now + 2 * 60 * 60 * 1000;
+
+  const userRef = ref(db, 'users/' + currentUser);
+  const snapshot = await get(userRef);
+  if (!snapshot.exists()) return;
+
+  const user = snapshot.val();
+  user.deleteUntil = deleteUntil;
+  await set(userRef, user);
+
+  activateFirebaseDeleteLock(deleteUntil);
+};
+
+window.activateFirebaseDeleteLock = function (endTime) {
+  deleteEndTime = endTime;
+
+ startCountdownDisplay(endTime);
+  // 🔒 Lock all buttons site-wide except cancel + profile
+  document.querySelectorAll("button").forEach(btn => {
+    const id = btn.id;
+    const allowList = ["cancel-delete-button", "profile-btn", "back-btnc"];
+    if (!allowList.includes(id)) {
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.pointerEvents = "none";
+    }
+  });
+
+  // Show cancel delete
+  document.getElementById("cancel-delete-button").style.display = "inline-block";
+
+  // 🕒 Start countdown
+  deleteTimer = setInterval(async () => {
+    if (Date.now() >= deleteEndTime) {
+      clearInterval(deleteTimer);
+      deleteTimer = null;
+
+      const userRef = ref(db, 'users/' + currentUser);
+      await remove(userRef);
+
+      localStorage.removeItem("wordFinderCurrentUser");
+      window.currentUser = null;
+
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById("auth-screen").classList.add("active");
+      document.getElementById("cancel-delete-button").style.display = "none";
+      showError("✅ Account deleted.");
+    }
+  }, 1000);
+};
+
+window.cancelPendingDeletion = async function () {
+  clearInterval(deleteTimer);
+  deleteTimer = null;
+
+  const userRef = ref(db, 'users/' + currentUser);
+  const snapshot = await get(userRef);
+  if (!snapshot.exists()) return;
+
+  const user = snapshot.val();
+  delete user.deleteUntil;
+  await set(userRef, user);
+
+  // 🔓 Re-enable all buttons
+  document.querySelectorAll("button").forEach(btn => {
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+  });
+
+  document.getElementById("cancel-delete-button").style.display = "none";
+  showError("❎ Deletion cancelled.");
+  document.getElementById("delete-timer-display").style.display = "none";
+  clearInterval(countdownInterval);
+};
+
+let countdownInterval = null;
+
+function startCountdownDisplay(endTime) {
+  const display = document.getElementById("delete-timer-display");
+  const countdownText = document.getElementById("countdown-text");
+  display.style.display = "block";
+
+  function updateCountdown() {
+    const now = Date.now();
+    const remaining = Math.max(0, endTime - now);
+
+    const hours = Math.floor(remaining / (1000 * 60 * 60));
+    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+
+    countdownText.textContent = `${hours}h ${minutes}m ${seconds}s`;
+
+    if (remaining <= 0) {
+      clearInterval(countdownInterval);
+      document.getElementById("delete-timer-display").style.display = "none";
+    }
+  }
+
+  updateCountdown(); // run once immediately
+  clearInterval(countdownInterval); // ensure only one is running
+  countdownInterval = setInterval(updateCountdown, 1000);
+}
+
+</script>
+</body>
+</html>
